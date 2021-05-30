@@ -36,10 +36,6 @@ func (T *VideoService) Check() error {
 		return errors.New("缺少视频名称: Title")
 	}
 
-	if T.WebUrl == "" {
-		return errors.New("缺少网页链接: WebLink")
-	}
-
 	if T.M3u8Url == "" {
 		return errors.New("缺少M3U8链接")
 	}
