@@ -36,10 +36,9 @@ var (
 	DbPass = getVar("DB_PASS", "root")
 
 	GeneralLog = getVar("GENERAL_LOG", "general.log")
-	InfoLog = getVar("INFO_LOG", "info.log")
-	ErrorLog = getVar("ERROR_LOG", "error.log")
+	InfoLog    = getVar("INFO_LOG", "info.log")
+	ErrorLog   = getVar("ERROR_LOG", "error.log")
 
 	ListenInterval = getInt("LISTEN_INTERVAL", 5)
-	VideoDir = getVar("VIDEO_DIR", "/Users/houzhenying/Desktop/GolandProjects/src/worker/video/")
-	)
-
+	VideoDir       = getVar("VIDEO_DIR", "")
+)

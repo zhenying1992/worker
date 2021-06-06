@@ -7,9 +7,11 @@ const (
 	VIDEO_DOWNLOAD = "视频下载"
 )
 
+type STATUS string
+
 const (
-	TASK_WAITING = "waiting"
-	TASK_RUNNING = "running"
-	TASK_FAILED  = "failed"
-	TASK_SUCCESS = "success"
+	TASK_WAITING STATUS = "waiting"
+	TASK_RUNNING STATUS = "running"
+	TASK_FAILED  STATUS = "failed"
+	TASK_SUCCESS STATUS = "success"
 )

@@ -1,7 +1,12 @@
 package common
 
 import (
+	"errors"
 	"github.com/sirupsen/logrus"
+	"io"
+	"net/http"
+	"os"
+	"path"
 	"sync"
 )
 
@@ -39,4 +44,33 @@ func ProtectRun(entry func()) {
 	}()
 
 	entry()
+}
+
+func DownLoadToFile(
+	url string,
+	file string,
+) error {
+	if err := os.MkdirAll(path.Dir(file), 0777); err != nil {
+		return err
+	}
+
+	f, err := os.Create(file)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != 200 {
+		return errors.New("http返回值错误")
+	}
+
+	if _, err = io.Copy(f, resp.Body); err != nil {
+		return err
+	}
+
+	return nil
 }

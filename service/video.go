@@ -7,18 +7,20 @@ import (
 	"github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
-	"worker/common"
+	"time"
+	. "worker/common"
 	"worker/model/task"
 	"worker/model/video"
+	"worker/sdk"
 )
 
 type VideoParams struct {
 	Title     string `json:"title"`
-	WebUrl   string `json:"web_link"`
-	M3u8Url  string `json:"m3u8_link"`
-	PicUrl   string `json:"pic_link"`
-	PrefixUrl    string `json:"prefix_link"`
-	KeyUrl string `json:"key_link"`
+	WebUrl    string `json:"web_link"`
+	M3u8Url   string `json:"m3u8_link"`
+	PicUrl    string `json:"pic_link"`
+	PrefixUrl string `json:"prefix_link"`
+	KeyUrl    string `json:"key_link"`
 }
 
 type VideoService struct {
@@ -55,82 +57,67 @@ func (T *VideoService) Run() {
 		90% 所有ts文件下载完成
 		95% 文件格式化完成
 		100% 入库
-	 */
-	defer common.UnLock()
+	*/
+	defer UnLock()
 	defer func() {
 		err := recover()
 		if err != nil {
-			x := fmt.Sprintf("%s", err)
-			logrus.Error(x)
-			if innerError := T.task.SetStatus(common.TASK_FAILED); innerError != nil {
-				logrus.Error(innerError)
-			}
-			if innerError := T.task.AppendLog(x); innerError != nil {
-				logrus.Error(innerError)
-			}
+			task.SetStatus(T.task, TASK_FAILED)
+			task.AppendLog(T.task, fmt.Sprintf("%s", err))
 		} else {
-			if innerError := T.task.SetStatus(common.TASK_SUCCESS); innerError != nil {
-				logrus.Error(innerError)
-			}
+			task.AppendLog(T.task, "任务执行完成")
+			task.SetStatus(T.task, TASK_SUCCESS)
 		}
 	}()
 
 	logrus.Info("开始运行任务 【" + strconv.Itoa(T.task.Id) + ":" + T.task.Name + "】")
-
-	if err := T.task.SetStatus(common.TASK_RUNNING); err != nil {
-		panic(err)
-	}
+	task.SetStatus(T.task, TASK_RUNNING)
 
 	if err := T.Check(); err != nil {
 		panic(err)
 	}
 	logrus.Debug(T.VideoParams)
 
-	// 1. 下载图片 进度5% TODO:后缀暂时写死
-	if err := T.task.AppendLog("开始下载图片"); err != nil {
+	// 1. 下载图片 TODO:后缀暂时写死
+	task.AppendLog(T.task, "开始下载图片")
+
+	savePath := strings.TrimRight(VideoDir, "/") + "/" + T.Title + "/" + "index.jpg"
+	if err := DownLoadToFile(T.PicUrl, savePath); err != nil {
 		panic(err)
 	}
 
-	savePath := strings.TrimRight(common.VideoDir, "/") + "/" + T.Title + "/" + "index.jpg"
-	if err := DownLoadToFile(T.PicUrl, savePath, nil, nil, 0); err != nil {
-		panic(err)
-	}
+	task.AppendLog(T.task, "图片下载完成")
 
-	if err := T.task.AppendLog("图片下载完成"); err != nil {
-		panic(err)
-	}
-	if err := T.task.UpdateProgress(5); err != nil {
-		panic(err)
-	}
-	logrus.Info("1. 图片下载完成")
+	// 2. 下载视频
+	task.AppendLog(T.task, "开始下载视频")
 
-	// 2. 下载视频 进度95%
-	if err := T.task.AppendLog("开始下载视频"); err != nil {
-		panic(err)
-	}
+	tool := sdk.NewM3u8DownloadTool(
+		T.VideoParams.Title,
+		VideoDir,
+		T.VideoParams.M3u8Url,
+		T.VideoParams.KeyUrl,
+		T.VideoParams.PrefixUrl,
+	)
 
-	if err := DownloadVideo(T.VideoParams, common.VideoDir, T.task); err != nil {
-		panic(err)
-	}
+	go tool.Run()
+	for {
+		status := tool.GetStatus()
+		if status == TASK_SUCCESS {
+			task.AppendLog(T.task, "视频下载完成")
+			break
+		}
 
-	if err := T.task.AppendLog("视频下载完成"); err != nil {
-		panic(err)
-	}
-	if err := T.task.UpdateProgress(95); err != nil {
-		panic(err)
-	}
-	logrus.Info("2. 视频下载完成")
+		if status == TASK_FAILED {
+			panic(tool.GetLog())
+		}
 
-	// 3. 入库 进度100%
+		task.SetProgress(T.task, tool.GetProgress())
+		time.Sleep(1 * time.Second)
+	}
+	task.SetProgress(T.task, tool.GetProgress())
+
+	// 3. 入库
 	if _, err := video.Create(T.Title); err != nil {
 		panic(err)
 	}
-
-	if err := T.task.AppendLog("任务完成"); err != nil {
-		panic(err)
-	}
-	if err := T.task.UpdateProgress(100); err != nil {
-		panic(err)
-	}
-	logrus.Info("3. 任务执行完成")
 }
